@@ -1,10 +1,9 @@
 package com.wk.mailsearch.service;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.io.PrintStream;
-import java.util.Properties;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -13,6 +12,9 @@ import java.util.concurrent.Semaphore;
 
 import org.apache.commons.io.FileUtils;
 import org.apache.solr.client.solrj.SolrServerException;
+import org.quartz.Job;
+import org.quartz.JobExecutionContext;
+import org.quartz.JobExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -20,8 +22,8 @@ import com.aspose.email.FolderInfo;
 import com.aspose.email.FolderInfoCollection;
 import com.aspose.email.MapiMessage;
 import com.aspose.email.PersonalStorage;
-import com.aspose.email.internal.u.in;
 import com.aspose.email.system.collections.generic.IGenericEnumerator;
+import com.wk.mailsearch.constants.ApplicationConstants;
 import com.wk.mailsearch.exception.ApplicationException;
 import com.wk.mailsearch.util.PropertyUtil;
 
@@ -32,7 +34,7 @@ import com.wk.mailsearch.util.PropertyUtil;
  * @author anchal.kataria
  *
  */
-public class PstFileHandler {
+public class PstFileHandler implements Job{
 
 	/** The Constant LOGGER. */
 	private static final Logger LOGGER = LoggerFactory.getLogger(PstFileHandler.class);
@@ -41,6 +43,7 @@ public class PstFileHandler {
 	/** The pst file path. */
 	private static String pstFilePath = null;//"/data1/email_search/CT_CoreSearch_Client_Services_Export.pst";
 	
+	private static String readPstFiles  = null;
 	/** The local mail dir. */
 	private static String localMailDir = null;//"/tmp/localmailstore";
 	
@@ -79,13 +82,12 @@ public class PstFileHandler {
 	private static int counter = 0;
 
 	private static PstFileHandler pstFileHandler;
-
+	private static int count =0 ; 
+	
 	/**
-	 * The main method.
-	 *
-	 * @param args the arguments
+	 * Psthandler.
 	 */
-	public static void main(String[] args) {
+	public void psthandler() throws ApplicationException{
 		
 		
 		//initializing the property file
@@ -94,10 +96,12 @@ public class PstFileHandler {
 		} catch (ApplicationException e2) {
 			LOGGER.warn("Error in initializing property file");
 			LOGGER.error(e2.getMessage(),e2);
+			throw new ApplicationException("Error in initializing property file",e2);
 		}
 
 		
 		pstFilePath = PropertyUtil.getProperty("pstFilePath");
+		readPstFiles = PropertyUtil.getProperty("readPstFilePath");
 		localMailDir = PropertyUtil.getProperty("localMailDir");
 		remoteMailDir = PropertyUtil.getProperty("remoteMailDir");
 		remoteHost = PropertyUtil.getProperty("remoteHost");
@@ -107,19 +111,20 @@ public class PstFileHandler {
 		
 	
 		remoteUrl = "http://"+remoteHost+":8983/fileupload/";
-		solrHttpUrl = "http://"+remoteHost+":8983/solr/collection1/";
+		solrHttpUrl = "http://"+remoteHost+":8983/solr/email/";
 
 		try {
 			cleanDirectory(localMailDir);
 		} catch (ApplicationException e2) {
 			LOGGER.warn("Error in cleaning the directory");
 			LOGGER.error(e2.getMessage(),e2);
+			throw new ApplicationException("Error in cleaning the directory",e2);
 		}
 
 //		String pstFileName = "/home/djoshi/Downloads/Deepak.pst";
 //		String msgFolderName = null;
 
-		String msgFolderName = null;//"/data1/email_search/output";
+		
 
 		//		System.setProperty("java.net.useSystemProxies", "false");
 		//		System.setProperty("proxySet", "true");
@@ -141,6 +146,7 @@ public class PstFileHandler {
 		} catch (ApplicationException e1) {
 			LOGGER.warn("Error in deleting documents from solr");
 			LOGGER.error(e1.getMessage(),e1);
+			throw new ApplicationException("Error in deleting documents from solr",e1);
 		}
 
 		long startTime = System.currentTimeMillis();
@@ -148,12 +154,13 @@ public class PstFileHandler {
 		
 		LOGGER.info("PST file handling Starting time : {}",startTime);
 		LOGGER.info("Going to index documents");
-		
+		final File folder = new File(pstFilePath);
 		try {
-			processPstFile(pstFilePath , msgFolderName);
+			listFilesForFolder(folder);
 		} catch (ApplicationException e1) {
-			LOGGER.warn("Error in processing pst files");
+			LOGGER.warn("Error in listing pst files directory");
 			LOGGER.error(e1.getMessage(),e1);
+			throw new ApplicationException("Error in listing pst files directory",e1);
 		}
 		
 		try {
@@ -161,6 +168,7 @@ public class PstFileHandler {
 		} catch (InterruptedException e) {
 			LOGGER.warn("Error occured while acquiring threads");
 			LOGGER.error(e.getMessage(),e);
+			throw new ApplicationException("Interruption occured while running threads",e);
 		}
 		
 		LOGGER.info("Indexing of documents done");
@@ -172,6 +180,71 @@ public class PstFileHandler {
 				
 
 		
+	}
+	
+	/**
+	 * List files for folder.
+	 *
+	 * @param folder the folder
+	 */
+	public void listFilesForFolder(final File folder) throws ApplicationException{
+		String msgFolderName = null;//"/data1/email_search/output";
+	    for (final File fileEntry : folder.listFiles()) {
+	        if (fileEntry.isDirectory()) {
+	            listFilesForFolder(fileEntry);
+	        } else {
+	            System.out.println(fileEntry.getAbsolutePath());
+	            String[] tokens = fileEntry.getName().split(ApplicationConstants.SEPARATOR);
+	            String dataset = tokens[0];
+	            try {
+	    			//process pst files
+	    			processPstFile(fileEntry.getAbsolutePath() , msgFolderName, dataset);
+	    		} catch (ApplicationException e1) {
+	    			LOGGER.warn("Error in processing pst files");
+	    			LOGGER.error(e1.getMessage(),e1);
+	    			throw new ApplicationException("Error in processing pst files",e1);
+	    		}
+	            
+	            //move read pst files to another folder
+	            try {
+					moveFiles(fileEntry.getAbsolutePath(),readPstFiles);
+				} catch (ApplicationException e) {
+					LOGGER.warn("Error in moving processed pst files from one directory to another");
+	    			LOGGER.error(e.getMessage(),e);
+	    			throw new ApplicationException("Error in moving processed pst files from one directory to another",e);
+				}
+	    		
+	            //delete pst files after processing it
+	           // fileEntry.delete();
+	        }
+	    }
+	}
+
+	
+	/**
+	 * Move pst files after it get processed.
+	 *
+	 * @param pstfiledir the pstfiledir
+	 * @param readpstdir the readpstdir
+	 * @throws ApplicationException the application exception
+	 */
+	private void moveFiles(String pstfiledir, String readpstdir) throws ApplicationException {
+		
+		Path sourceDir = Paths.get(pstfiledir);
+		 String fileName = new File(pstfiledir).getName();
+	    Path destinationDir = Paths.get(readpstdir);
+	    
+	   createDirectory(destinationDir.toString());
+	   Path d2 = destinationDir.resolve(fileName);
+	           
+	           try {
+				Files.move(sourceDir, d2);
+			} catch (IOException e) {
+				LOGGER.warn("Error in moving file : {}",fileName);
+				LOGGER.error(e.getMessage(),e);
+				throw new ApplicationException("Error in moving file",e);
+			}
+	       
 	}
 
 	/**
@@ -211,12 +284,12 @@ public class PstFileHandler {
 	 * @throws SolrServerException the solr server exception
 	 * @throws IOException Signals that an I/O exception has occurred.
 	 */
-	public static void processPstFile(String pstFileName, String msgFolderName)
+	public static void processPstFile(String pstFileName, String msgFolderName,String dataset)
 	throws ApplicationException{
 		
 		PersonalStorage pst = PersonalStorage.fromFile(pstFileName);
 		FolderInfo folderInfo = pst.getRootFolder();
-		processMailFolder(folderInfo, msgFolderName);
+		processMailFolder(folderInfo, msgFolderName,dataset);
 	}
 
 	
@@ -227,7 +300,7 @@ public class PstFileHandler {
 	 * @param msgFolderName the msg folder name
 	 * @throws ApplicationException the application exception
 	 */
-	public static void processMailFolder(FolderInfo folderInfo, String msgFolderName) throws ApplicationException{
+	public static void processMailFolder(FolderInfo folderInfo, String msgFolderName, String dataset) throws ApplicationException{
 		if( (msgFolderName == null) || (!msgFolderName.isEmpty()) ){
 			msgFolderName = "/";
 		}
@@ -242,7 +315,7 @@ public class PstFileHandler {
 			
 				MapiMessage msg = iter.next();
 				
-				MessageHandler.MsgObject msgObject = new MessageHandler.MsgObject(msg, msgFolderName, localMailDir, remoteMailDir);
+				MessageHandler.MsgObject msgObject = new MessageHandler.MsgObject(msg, msgFolderName, localMailDir, remoteMailDir,dataset);
 				try {
 					processMsg(msgObject);
 				} catch (ApplicationException e) {
@@ -255,7 +328,7 @@ public class PstFileHandler {
 
 		FolderInfoCollection folderInfoCollection = folderInfo.getSubFolders();
 		for(FolderInfo  fInfo: folderInfoCollection){
-			processMailFolder(fInfo, msgFolderName);
+			processMailFolder(fInfo, msgFolderName,dataset);
 		}
 	}
 
@@ -333,6 +406,18 @@ public class PstFileHandler {
 				LOGGER.error(se.getMessage(),se);
 				throw new ApplicationException("Error occured while creating directory",se);
 			}        
+		}
+	}
+
+	public void execute(JobExecutionContext arg0) throws JobExecutionException {
+	
+		PstFileHandler psHandler =  new PstFileHandler();
+		//System.out.println("calling psthandler for --"+count++);
+		try {
+			psHandler.psthandler();
+		} catch (ApplicationException e) {
+			LOGGER.warn("Error occured while handling pst file processing");
+			LOGGER.error(e.getMessage(),e);
 		}
 	}
 }

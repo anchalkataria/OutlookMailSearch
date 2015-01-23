@@ -16,7 +16,7 @@ import com.wk.mailsearch.exception.ApplicationException;
 
 
 /** It loads Configuration Properties and fetch property map 
- * @author saloni.tapdiya
+ * @author anchal.kataria
  * 
  */
 public class PropertyUtil {

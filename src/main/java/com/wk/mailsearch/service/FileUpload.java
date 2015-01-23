@@ -48,17 +48,22 @@ public class FileUpload {
 	public static void uploadFile(String filePath, String remoteMailDir) throws ApplicationException{
 		HttpClient client = new HttpClient();
 		PostMethod filePost = new PostMethod(hostUrl);
-//		filePost.addParameter("mail_path", destPath);		
+	
 
 		File targetFile = new File(filePath);
+		
 		try{
 		Part[] parts = {new FilePart(targetFile.getName(), targetFile)};
 		filePost.setRequestEntity(new MultipartRequestEntity(parts, filePost.getParams()));
 		filePost.setRequestHeader("mail_path", remoteMailDir);
 
 		int status = client.executeMethod(filePost);
+		
 		if (status != HttpStatus.SC_OK) {
 			LOGGER.info("Response string: {}",filePost.getResponseBodyAsString());
+		}
+		else{
+			LOGGER.info("File uploaded successfully to : {}",targetFile.getName());
 		}
 	}
 	

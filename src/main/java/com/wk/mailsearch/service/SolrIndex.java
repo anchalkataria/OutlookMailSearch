@@ -56,22 +56,24 @@ public class SolrIndex {
 //		}
 	}
 	
-	/**
-	 * Adds the document.
-	 *
-	 * @param id the id
-	 * @param subject the subject
-	 * @param contents the contents
-	 * @param hasAttachment the has attachment
-	 * @param flagged the flagged
-	 * @param sender the sender
-	 * @param recipients the recipients
-	 * @param deliveryTime the delivery time
-	 * @param folder the folder
-	 * @return true, if successful
-	 * @throws ApplicationException 
-	 */
-	public static boolean addDocument(
+	
+	 /**
+ 	 * Adds the document.
+ 	 *
+ 	 * @param id the id
+ 	 * @param subject the subject
+ 	 * @param contents the contents
+ 	 * @param hasAttachment the has attachment
+ 	 * @param flagged the flagged
+ 	 * @param sender the sender
+ 	 * @param recipients the recipients
+ 	 * @param deliveryTime the delivery time
+ 	 * @param folder the folder
+ 	 * @param dataset the dataset
+ 	 * @return true, if successful
+ 	 * @throws ApplicationException the application exception
+ 	 */
+ 	public static boolean addDocument(
 			String id,
 			String subject,
 			String contents, 
@@ -80,7 +82,8 @@ public class SolrIndex {
 			String sender, 
 			String recipients, 
 			Object deliveryTime, 
-			String folder) 
+			String folder,
+			String dataset) 
 	throws  ApplicationException{
 		SolrInputDocument doc = new SolrInputDocument();
 		doc.addField("subject", subject);
@@ -92,6 +95,7 @@ public class SolrIndex {
 		doc.addField("deliveryTime", deliveryTime);
 		doc.addField("id", id);
 		doc.addField("folder", folder);
+		doc.addField("dataset", dataset);
 		UpdateResponse response = null;
 		boolean flag = false;
 		try{

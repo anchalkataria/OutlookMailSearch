@@ -1,4 +1,5 @@
 package com.wk.mailsearch.service;
+import java.io.File;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.TimeUnit;
@@ -34,6 +35,7 @@ public class MessageHandler implements Runnable {
 		MapiMessage msg = msgObject.msg;
 		String localMailDir = msgObject.localMailDir;
 		String remoteMailDir = msgObject.remoteMailDir;
+		
 		//PrintStream exceptionWriter = msgObject.exceptionWriter;
 		//exceptionWriter.append(msg.getInternetMessageId());
 		LOGGER.info("internet id : {}",msg.getInternetMessageId());
@@ -50,19 +52,27 @@ public class MessageHandler implements Runnable {
 						"Error while indexing document to solr", e);
 			}
 			msg.save(localFilePath);
-//			FileUpload.uploadFile(localFilePath, remoteMailDir);
-//			try{
-//				new File(localFilePath).delete();
-//			}catch(Exception e){
-//				e.printStackTrace(exceptionWriter);
-//			}
+			
+			//uploading files to remote directory
+			try {
+				FileUpload.uploadFile(localFilePath, remoteMailDir);
+			} catch (ApplicationException e) {
+				LOGGER.warn("Problem occured while uploading files to remote directory");
+				LOGGER.error(e.getMessage(), e);
+				throw new ApplicationException(
+						"Error while uploading files to remote directory", e);
+			}
+			
+				//delete file from local path
+				new File(localFilePath).delete();
+			
 		
 	}
 
 	
 	
 	/**
-	 * Index message.
+	 * Index messages to solr.
 	 *
 	 * @param msgObject the msg object
 	 * @throws ApplicationException the application exception
@@ -75,7 +85,7 @@ public class MessageHandler implements Runnable {
 		String remoteMailDir = msgObject.remoteMailDir;
 		String id = msg.getInternetMessageId().replaceAll("[^A-Za-z0-9]", "");
 		String localFilePath = localMailDir+"/"+id+".msg";
-
+		String dataset = msgObject.dataset;
 		String senderAddress = msg.getSenderEmailAddress();
 		Date date = msg.getDeliveryTime();
 
@@ -108,7 +118,8 @@ public class MessageHandler implements Runnable {
 					senderAddress, 
 					recipients, 
 					formatedDate, 
-					msgFolderName);
+					msgFolderName,
+					dataset);
 		} catch (ApplicationException e1) {
 			LOGGER.warn("Error occured while indexing document to solr");
 			LOGGER.error(e1.getMessage(), e1);
@@ -145,13 +156,14 @@ public class MessageHandler implements Runnable {
 		public MsgObject(MapiMessage msg, 
 				String msgFolderName, 
 				String localMailDir,
-				String remoteMailDir
+				String remoteMailDir,String dataset
 				) {
 			
 			this.msg = msg;
 			this.msgFolderName = msgFolderName;
 			this.localMailDir = localMailDir;
 			this.remoteMailDir = remoteMailDir;
+			this.dataset = dataset;
 			
 		}
 		
@@ -168,7 +180,8 @@ public class MessageHandler implements Runnable {
 		/** The remote mail dir. */
 		String remoteMailDir;
 		
-		
+		/** The dataset. */
+		String dataset;
 	}
 
 	/* (non-Javadoc)
